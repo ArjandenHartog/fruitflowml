@@ -271,4 +271,15 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is open source and available under the MIT License. 
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+### MIT License Summary
+- ✓ Commercial use
+- ✓ Modification
+- ✓ Distribution
+- ✓ Private use
+- ✓ Sublicense
+
+The only requirement is to include the original copyright notice and license notice in any copy of the software/substantial portions of the software.
+
+For the complete license text, please see the [LICENSE](LICENSE) file in the repository. 
