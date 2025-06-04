@@ -163,6 +163,108 @@ The model achieves:
 
 Detailed performance metrics and visualizations are generated during training and saved in the `model_visualizations/` directory.
 
+## OutSystems Integration
+
+### API Endpoint
+
+The application provides a REST API endpoint that can be integrated with OutSystems applications.
+
+#### Production Endpoint
+- **URL**: `https://api.fruitflow.site/api/predict/base64plain`
+- **Method**: `POST`
+- **Content-Type**: `application/json`
+
+#### Development Endpoint (Local Testing)
+- **URL**: `http://your-server:5000/analyze`
+- **Method**: `POST`
+- **Content-Type**: `application/json`
+
+#### Request Parameters
+```json
+{
+    "image": "base64_encoded_image_string"
+}
+```
+
+#### Response Format
+```json
+{
+    "classification": "fresh",
+    "filename": "voorbeeld.jpg",
+    "fresh_percentage": 87.23,
+    "rotten_percentage": 12.77,
+    "success": true,
+    "heatmap_data": "base64_encoded_string_hier",
+    "heatmap_overlay_data": "base64_encoded_string_hier",
+    "image_url": "https://yourdomain.com/uploads/filename.jpg"
+}
+```
+
+#### Response Fields
+- `classification`: String - Either "fresh" or "rotten"
+- `filename`: String - Name of the processed image file
+- `fresh_percentage`: Number - Confidence percentage for fresh classification (0-100)
+- `rotten_percentage`: Number - Confidence percentage for rotten classification (0-100)
+- `success`: Boolean - Indicates if the analysis was successful
+- `heatmap_data`: String - Base64 encoded heatmap visualization
+- `heatmap_overlay_data`: String - Base64 encoded heatmap overlay on original image
+- `image_url`: String - URL to the processed image
+
+### OutSystems Integration Steps
+
+1. In OutSystems Service Studio, create a REST API integration:
+   - Set the Method to `POST`
+   - Set the URL to: `https://api.fruitflow.site/api/predict/base64plain`
+   - Set Content-Type to `application/json`
+   - Configure the input structure as Text data type
+   - Set the request to be sent in the body
+
+2. Create the input structure:
+```json
+{
+    "image": "Text"
+}
+```
+
+3. Create the output structure matching the response format above:
+```json
+{
+    "classification": "Text",
+    "filename": "Text",
+    "fresh_percentage": "Decimal",
+    "rotten_percentage": "Decimal",
+    "success": "Boolean",
+    "heatmap_data": "Text",
+    "heatmap_overlay_data": "Text",
+    "image_url": "Text"
+}
+```
+
+4. Use the REST API in your OutSystems application:
+   - Convert your image to base64 before sending
+   - Send the request using the REST API
+   - Handle the response in your application logic
+
+### Example Usage in OutSystems
+
+```javascript
+// Example structure for the API call in OutSystems
+var request = {
+    image: $base64EncodedImage
+};
+
+// Make the API call to the production endpoint
+var response = SendRequest("POST", "https://api.fruitflow.site/api/predict/base64plain", request);
+
+// Handle the response
+if (response.success) {
+    // Use the classification results
+    ShowClassification(response.classification);
+    DisplayConfidence(response.fresh_percentage, response.rotten_percentage);
+    ShowHeatmap(response.heatmap_data);
+}
+```
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
