@@ -12,16 +12,13 @@ import matplotlib.gridspec as gridspec
 from matplotlib.patches import Patch
 import itertools
 
-# Constants
 IMG_WIDTH, IMG_HEIGHT = 224, 224
 BATCH_SIZE = 32
 MODEL_PATH = 'apple_classifier_model.h5'
 VISUALIZATION_DIR = 'explained_visuals'
 
-# Create visualization directory
 os.makedirs(VISUALIZATION_DIR, exist_ok=True)
 
-# Functie voor visuele stijl
 def set_style():
     plt.style.use('seaborn-v0_8-whitegrid')
     plt.rcParams['figure.figsize'] = (12, 8)
@@ -33,14 +30,12 @@ def set_style():
     plt.rcParams['legend.fontsize'] = 10
     plt.rcParams['figure.titlesize'] = 16
 
-# Set styling for all plots
 set_style()
 
 print("Model laden...")
 model = load_model(MODEL_PATH)
 model.summary()
 
-# Testgegevens voorbereiden
 test_datagen = ImageDataGenerator(rescale=1./255)
 test_generator = test_datagen.flow_from_directory(
     'test',
@@ -50,11 +45,9 @@ test_generator = test_datagen.flow_from_directory(
     shuffle=False
 )
 
-# Paden naar testafbeeldingen opslaan
 test_image_paths = [os.path.join('test', test_generator.filenames[i]) for i in range(len(test_generator.filenames))]
 print(f"Gevonden testafbeeldingen: {len(test_image_paths)}")
 
-# Voorspellingen genereren
 print("Voorspellingen genereren...")
 y_true = test_generator.classes
 y_pred_raw = model.predict(test_generator)
@@ -63,26 +56,21 @@ y_pred_classes = (y_pred > 0.5).astype(int)
 accuracy = (y_pred_classes == y_true).mean()
 print(f"Nauwkeurigheid: {accuracy:.4f}")
 
-# 1. Uitgebreide confusion matrix met uitleg
 def plot_confusion_matrix_with_explanation():
     cm = confusion_matrix(y_true, y_pred_classes)
     
-    # Bereken percentages
     cm_norm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
     total = cm.sum()
     
-    # Maak de plot
     fig = plt.figure(figsize=(14, 10))
     gs = gridspec.GridSpec(2, 2, width_ratios=[3, 2], height_ratios=[3, 1])
     
-    # Confusion matrix plot
     ax0 = plt.subplot(gs[0])
     classes = ['Vers', 'Rot']
     
     im = ax0.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
     ax0.set_title("Confusion Matrix: Appel Classificatie", fontsize=16, pad=20)
     
-    # Labels
     tick_marks = np.arange(len(classes))
     ax0.set_xticks(tick_marks)
     ax0.set_yticks(tick_marks)
@@ -91,18 +79,15 @@ def plot_confusion_matrix_with_explanation():
     ax0.set_ylabel('Werkelijke klasse', fontsize=14)
     ax0.set_xlabel('Voorspelde klasse', fontsize=14)
     
-    # Waarden in de cellen
     thresh = cm.max() / 2.
     for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
         ax0.text(j, i, f"{cm[i, j]}\n({cm_norm[i, j]:.1%})",
                  horizontalalignment="center", fontsize=14,
                  color="white" if cm[i, j] > thresh else "black")
     
-    # Colorbar
     cbar = plt.colorbar(im, ax=ax0, shrink=0.8)
     cbar.set_label('Aantal voorspellingen', fontsize=12)
     
-    # Toevoeging van uitleg
     ax1 = plt.subplot(gs[1])
     ax1.axis('off')
     ax1.text(0, 0.9, "Confusion Matrix Uitleg:", fontsize=14, fontweight='bold')
@@ -111,7 +96,6 @@ def plot_confusion_matrix_with_explanation():
     ax1.text(0, 0.3, "• False Positives (rechtsboven): Incorrect als 'rot' geclassificeerd", fontsize=12)
     ax1.text(0, 0.1, "• False Negatives (linksonder): Incorrect als 'vers' geclassificeerd", fontsize=12)
     
-    # Prestatiemetrieken
     precision = cm[1, 1] / cm[:, 1].sum() if cm[:, 1].sum() > 0 else 0
     recall = cm[1, 1] / cm[1, :].sum() if cm[1, :].sum() > 0 else 0
     f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
@@ -128,20 +112,15 @@ def plot_confusion_matrix_with_explanation():
     plt.savefig(os.path.join(VISUALIZATION_DIR, 'confusion_matrix_explained.png'), dpi=300, bbox_inches='tight')
     plt.close()
 
-# 2. ROC en PR curves met uitleg
 def plot_curves_with_explanation():
-    # ROC data
     fpr, tpr, _ = roc_curve(y_true, y_pred)
     roc_auc = auc(fpr, tpr)
     
-    # PR data
     precision, recall, _ = precision_recall_curve(y_true, y_pred)
     avg_precision = average_precision_score(y_true, y_pred)
     
-    # Visualisatie
     fig, axs = plt.subplots(2, 2, figsize=(15, 12), gridspec_kw={'width_ratios': [3, 2]})
     
-    # ROC curve
     axs[0, 0].plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (AUC = {roc_auc:.3f})')
     axs[0, 0].plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
     axs[0, 0].set_xlim([0.0, 1.0])
@@ -152,7 +131,6 @@ def plot_curves_with_explanation():
     axs[0, 0].legend(loc="lower right")
     axs[0, 0].grid(True, linestyle='--', alpha=0.7)
     
-    # ROC uitleg
     axs[0, 1].axis('off')
     axs[0, 1].text(0, 0.95, "ROC Curve Uitleg:", fontsize=14, fontweight='bold')
     axs[0, 1].text(0, 0.85, "De ROC (Receiver Operating Characteristic) curve toont de trade-off tussen:", fontsize=12)
@@ -164,7 +142,6 @@ def plot_curves_with_explanation():
     axs[0, 1].text(0, 0.20, "• AUC = 0.5: Willekeurig model (stippellijn)", fontsize=12)
     axs[0, 1].text(0, 0.10, "• Hoe dichter bij 1.0, hoe beter het model", fontsize=12)
     
-    # PR curve
     axs[1, 0].plot(recall, precision, color='blue', lw=2, label=f'PR curve (AP = {avg_precision:.3f})')
     axs[1, 0].fill_between(recall, precision, alpha=0.2, color='blue')
     axs[1, 0].set_xlim([0.0, 1.0])
@@ -175,7 +152,6 @@ def plot_curves_with_explanation():
     axs[1, 0].legend(loc="upper right")
     axs[1, 0].grid(True, linestyle='--', alpha=0.7)
     
-    # PR uitleg
     axs[1, 1].axis('off')
     axs[1, 1].text(0, 0.95, "Precision-Recall Curve Uitleg:", fontsize=14, fontweight='bold')
     axs[1, 1].text(0, 0.85, "De PR curve is vooral nuttig bij onevenwichtige datasets:", fontsize=12)
@@ -191,20 +167,16 @@ def plot_curves_with_explanation():
     plt.savefig(os.path.join(VISUALIZATION_DIR, 'performance_curves_explained.png'), dpi=300, bbox_inches='tight')
     plt.close()
 
-# 3. Voorspellingsdistributie met uitleg
 def plot_prediction_distribution_with_explanation():
-    # Voorspellingen opsplitsen per klasse
     fresh_preds = y_pred[y_true == 0]
     rotten_preds = y_pred[y_true == 1]
     
-    # Voorspellingsbetrouwbaarheid berekenen
     fresh_conf = np.maximum(1 - fresh_preds, fresh_preds)
     rotten_conf = np.maximum(1 - rotten_preds, rotten_preds)
     
     fig = plt.figure(figsize=(15, 10))
     gs = gridspec.GridSpec(2, 3, width_ratios=[3, 3, 2], height_ratios=[4, 1])
     
-    # Histogram van voorspellingen
     ax1 = plt.subplot(gs[0, 0])
     bins = np.linspace(0, 1, 21)
     ax1.hist(fresh_preds, bins=bins, alpha=0.7, color='green', label='Verse appels')
@@ -216,7 +188,6 @@ def plot_prediction_distribution_with_explanation():
     ax1.legend()
     ax1.grid(True, linestyle='--', alpha=0.7)
     
-    # Violin plot
     ax2 = plt.subplot(gs[0, 1])
     data = {
         'Waarschijnlijkheid': np.concatenate([fresh_preds, rotten_preds]),
@@ -232,7 +203,6 @@ def plot_prediction_distribution_with_explanation():
     ax2.set_title('Violin plot van voorspellingsverdelingen')
     ax2.grid(True, linestyle='--', alpha=0.7)
     
-    # Uitleg van de plots
     ax3 = plt.subplot(gs[0, 2])
     ax3.axis('off')
     ax3.text(0, 0.95, "Voorspellingsdistributie Uitleg:", fontsize=14, fontweight='bold')
@@ -245,11 +215,9 @@ def plot_prediction_distribution_with_explanation():
     ax3.text(0, 0.20, "• Rotte appels: voorspellingen dichtbij 1", fontsize=12)
     ax3.text(0, 0.10, "• Minder overlap betekent een beter model", fontsize=12)
     
-    # Statistieken
     ax4 = plt.subplot(gs[1, :])
     ax4.axis('off')
     
-    # Bereken statistieken
     correctly_fresh = np.sum(fresh_preds < 0.5)
     correctly_rotten = np.sum(rotten_preds >= 0.5)
     incorrectly_fresh = len(fresh_preds) - correctly_fresh
@@ -276,30 +244,23 @@ def plot_prediction_distribution_with_explanation():
                dpi=300, bbox_inches='tight')
     plt.close()
 
-# 4. Model prestatie-overzicht met visuele componenten
 def plot_model_performance_summary():
-    # Confusion matrix voor berekeningen
     cm = confusion_matrix(y_true, y_pred_classes)
     
-    # Metrics berekenen
     accuracy = (cm[0, 0] + cm[1, 1]) / np.sum(cm)
     precision = cm[1, 1] / cm[:, 1].sum() if cm[:, 1].sum() > 0 else 0
     recall = cm[1, 1] / cm[1, :].sum() if cm[1, :].sum() > 0 else 0
     f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
     specificity = cm[0, 0] / cm[0, :].sum() if cm[0, :].sum() > 0 else 0
     
-    # ROC AUC
     fpr, tpr, _ = roc_curve(y_true, y_pred)
     roc_auc = auc(fpr, tpr)
     
-    # Precision-Recall AUC
     avg_precision = average_precision_score(y_true, y_pred)
     
-    # Hoofdfiguur instellen
     fig = plt.figure(figsize=(15, 10))
     gs = gridspec.GridSpec(2, 3, height_ratios=[1, 1.5])
     
-    # Titel en algemene info
     ax_title = plt.subplot(gs[0, :])
     ax_title.axis('off')
     ax_title.text(0.5, 0.6, "Appel Classificatie Model: Prestatie Overzicht", 
@@ -307,7 +268,6 @@ def plot_model_performance_summary():
     ax_title.text(0.5, 0.3, f"Model: apple_classifier_model.h5   |   Klassen: Verse en Rotte Appels", 
                  fontsize=14, ha='center', color='gray')
     
-    # Metrics als grote cijfers met uitleg
     ax_metrics = plt.subplot(gs[1, 0])
     ax_metrics.axis('off')
     metrics = [
@@ -324,7 +284,6 @@ def plot_model_performance_summary():
         ax_metrics.text(0.4, 0.9 - i*0.15, f"{value:.3f}", fontsize=16, color='blue', fontweight='bold')
         ax_metrics.text(0.6, 0.9 - i*0.15, desc, fontsize=12, color='gray')
     
-    # Mini-versie van ROC en confusion matrix
     ax_roc = plt.subplot(gs[1, 1])
     ax_roc.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC (AUC = {roc_auc:.3f})')
     ax_roc.plot([0, 1], [0, 1], color='navy', lw=1, linestyle='--')
@@ -336,7 +295,6 @@ def plot_model_performance_summary():
     ax_roc.legend(loc="lower right")
     ax_roc.grid(True, linestyle='--', alpha=0.7)
     
-    # Mini confusion matrix
     ax_cm = plt.subplot(gs[1, 2])
     classes = ['Vers', 'Rot']
     
@@ -349,7 +307,6 @@ def plot_model_performance_summary():
     ax_cm.set_ylabel('Werkelijke klasse')
     ax_cm.set_xlabel('Voorspelde klasse')
     
-    # Waarden in cellen
     thresh = cm.max() / 2.
     for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
         ax_cm.text(j, i, format(cm[i, j], 'd'),
@@ -361,7 +318,6 @@ def plot_model_performance_summary():
                dpi=300, bbox_inches='tight')
     plt.close()
 
-# Alle visualisaties genereren
 print("Visualisaties met uitleg genereren...")
 plot_confusion_matrix_with_explanation()
 plot_curves_with_explanation()
@@ -369,4 +325,4 @@ plot_prediction_distribution_with_explanation()
 plot_model_performance_summary()
 
 print(f"Alle visualisaties zijn opgeslagen in de map '{VISUALIZATION_DIR}'")
-print("Visualisatie voltooid!") 
+print("Visualisatie voltooid!")

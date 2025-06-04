@@ -17,127 +17,80 @@ import datetime
 import cv2
 import matplotlib.pyplot as plt
 
-# Configureer logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes to allow OutSystems to call the API
+CORS(app)
 
-# Configuration
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 MODEL_PATH = 'apple_classifier_model.h5'
 
-# Create uploads folder if it doesn't exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload size
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-# Load the trained model only once at startup
 model = load_model(MODEL_PATH)
 
-# Constants for image preprocessing
 IMG_WIDTH, IMG_HEIGHT = 224, 224
 
-# Function to generate Grad-CAM heatmap
 def generate_gradcam(img_array, model, last_conv_layer_name="conv2d_3"):
-    """
-    Generate Grad-CAM heatmap for an image
-    
-    Args:
-        img_array: Preprocessed image (normalized, expanded dims)
-        model: The trained model
-        last_conv_layer_name: Name of the last convolutional layer in the model
-    
-    Returns:
-        Heatmap array and superimposed image with heatmap
-    """
     try:
-        # Create a model that maps the input image to the activations
-        # of the last conv layer and the output predictions
         grad_model = tf.keras.models.Model(
             [model.inputs], 
             [model.get_layer(last_conv_layer_name).output, model.output]
         )
         
-        # Compute the gradient of the top predicted class with respect to the last conv layer
         with tf.GradientTape() as tape:
             last_conv_layer_output, preds = grad_model(img_array)
             pred_index = tf.argmax(preds[0])
             class_channel = preds[:, pred_index]
         
-        # Get the gradients of the top predicted class with respect to the output feature map of the last conv layer
         grads = tape.gradient(class_channel, last_conv_layer_output)
-        
-        # Vector of mean intensity of the gradient over a specific feature map channel
         pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
         
-        # Weight output feature map with gradient values
         last_conv_layer_output = last_conv_layer_output[0]
         heatmap = last_conv_layer_output @ pooled_grads[..., tf.newaxis]
         heatmap = tf.squeeze(heatmap)
         
-        # Normalize the heatmap
         heatmap = tf.maximum(heatmap, 0) / tf.math.reduce_max(heatmap)
         heatmap = heatmap.numpy()
         
         return heatmap
     except Exception as e:
         logger.error(f"Error in generate_gradcam: {str(e)}")
-        # Return a default heatmap if generation fails
-        return np.zeros((7, 7))  # Small default heatmap
+        return np.zeros((7, 7))
 
-# Function to overlay heatmap on original image and return both
 def create_heatmap_overlay(img_path, heatmap, alpha=0.6):
-    """
-    Create a superimposed heatmap on the original image and save both
-    
-    Args:
-        img_path: Path to the original image
-        heatmap: Generated heatmap array
-        alpha: Transparency factor (increased for better visibility)
-        
-    Returns:
-        Base64 encoded heatmap image and overlay image, and filenames
-    """
-    # Load the original image
     img = cv2.imread(img_path)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     height, width, _ = img.shape
     
-    # Resize the heatmap to match the original image size
     heatmap = cv2.resize(heatmap, (width, height))
     
-    # Enhance the heatmap contrast
     heatmap = np.maximum(heatmap, 0)
     heatmap = (heatmap - np.min(heatmap)) / (np.max(heatmap) - np.min(heatmap) + 1e-8)
     heatmap = np.uint8(255 * heatmap)
     
-    # Apply a more vibrant colormap
     heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
     heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
     
-    # Enhance the heatmap intensity
-    heatmap = np.float32(heatmap) * 1.2  # Increase intensity by 20%
+    heatmap = np.float32(heatmap) * 1.2
     heatmap = np.clip(heatmap, 0, 255)
     heatmap = np.uint8(heatmap)
     
-    # Superimpose the heatmap on original image with increased alpha
     superimposed_img = heatmap * alpha + img * (1 - alpha)
-    superimposed_img = np.clip(superimposed_img, 0, 255)  # Ensure values stay in valid range
+    superimposed_img = np.clip(superimposed_img, 0, 255)
     superimposed_img = np.uint8(superimposed_img)
     
-    # Convert both images to PIL Images
     heatmap_img = Image.fromarray(heatmap)
     overlay_img = Image.fromarray(superimposed_img)
     
-    # Save images and get filenames
     filename = os.path.basename(img_path)
     heatmap_filename, overlay_filename = save_visualization(heatmap_img, overlay_img, filename)
     
-    # Convert to base64 for response
     heatmap_buffer = io.BytesIO()
     overlay_buffer = io.BytesIO()
     
@@ -149,40 +102,22 @@ def create_heatmap_overlay(img_path, heatmap, alpha=0.6):
     
     return heatmap_base64, overlay_base64
 
-# Create PIL image heatmap
 def create_pil_heatmap(pil_img, heatmap, alpha=0.4):
-    """
-    Create heatmap overlay from PIL Image without saving to disk
-    
-    Args:
-        pil_img: PIL Image object
-        heatmap: Generated heatmap array
-        alpha: Transparency factor
-        
-    Returns:
-        Base64 encoded heatmap image and overlay image
-    """
-    # Convert PIL image to numpy array
     img = np.array(pil_img)
     height, width, _ = img.shape
     
-    # Resize the heatmap to match the original image size
     heatmap = cv2.resize(heatmap, (width, height))
     
-    # Convert heatmap to RGB format
     heatmap = np.uint8(255 * heatmap)
     heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
     heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
     
-    # Superimpose the heatmap on original image
     superimposed_img = heatmap * alpha + img
     superimposed_img = np.uint8(superimposed_img)
     
-    # Convert both images to base64
     heatmap_img = Image.fromarray(heatmap)
     overlay_img = Image.fromarray(superimposed_img)
     
-    # Save to buffer and convert to base64
     heatmap_buffer = io.BytesIO()
     overlay_buffer = io.BytesIO()
     
@@ -194,41 +129,33 @@ def create_pil_heatmap(pil_img, heatmap, alpha=0.4):
     
     return heatmap_base64, overlay_base64
 
-# Check if file extension is allowed
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# Preprocess image for prediction
 def preprocess_image(img_path):
     img = image.load_img(img_path, target_size=(IMG_WIDTH, IMG_HEIGHT))
     img_array = image.img_to_array(img)
     img_array = np.expand_dims(img_array, axis=0)
-    return img_array / 255.0  # Normalize to [0,1]
+    return img_array / 255.0
 
-# Process image from a PIL Image object
 def process_pil_image(pil_img):
     pil_img = pil_img.resize((IMG_WIDTH, IMG_HEIGHT))
     img_array = image.img_to_array(pil_img)
     img_array = np.expand_dims(img_array, axis=0)
     return img_array / 255.0
 
-# Helper functie om te controleren of een string een geldige base64 is
 def is_valid_base64(s):
     try:
-        # Check of het een string is
         if not isinstance(s, str):
             return False, "Input is geen string"
         
-        # Verwijder data URL prefix als die aanwezig is
         if 'base64,' in s:
             s = s.split('base64,')[1]
         
-        # Check of de string niet leeg is
         if not s:
             return False, "Base64 string is leeg"
         
-        # Valideer de base64 string door te proberen te decoderen
         base64.b64decode(s)
         return True, None
     except Exception as e:
@@ -253,11 +180,9 @@ def predict():
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(file_path)
         
-        # Make prediction
         processed_image = preprocess_image(file_path)
         prediction = model.predict(processed_image)[0][0]
         
-        # Generate heatmap
         try:
             heatmap = generate_gradcam(processed_image, model)
             heatmap_base64, overlay_base64 = create_heatmap_overlay(file_path, heatmap)
@@ -265,8 +190,6 @@ def predict():
             logger.error(f"Error generating heatmap: {str(e)}")
             heatmap_base64, overlay_base64 = None, None
         
-        # Convert prediction to percentage
-        # In our model, 0 = fresh, 1 = rotten (based on alphabetical order)
         fresh_percentage = (1 - prediction) * 100
         rotten_percentage = prediction * 100
         
@@ -282,13 +205,8 @@ def predict():
     
     return jsonify({'error': 'File not allowed'})
 
-# API endpoints for OutSystems integration
-
 @app.route('/api/predict', methods=['POST'])
 def api_predict():
-    """
-    API endpoint that accepts image file uploads from OutSystems.
-    """
     if 'file' not in request.files:
         return jsonify({
             'success': False,
@@ -304,7 +222,6 @@ def api_predict():
         }), 400
     
     if file and allowed_file(file.filename):
-        # Generate a unique filename while preserving the original name
         original_filename = secure_filename(file.filename)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         unique_id = str(uuid.uuid4())[:8]
@@ -313,11 +230,9 @@ def api_predict():
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(file_path)
         
-        # Make prediction
         processed_image = preprocess_image(file_path)
         prediction = model.predict(processed_image)[0][0]
         
-        # Generate heatmap
         try:
             heatmap = generate_gradcam(processed_image, model)
             heatmap_base64, overlay_base64 = create_heatmap_overlay(file_path, heatmap)
@@ -326,7 +241,6 @@ def api_predict():
             heatmap_base64, overlay_base64 = None, None
         
         response = create_api_response(prediction, filename, heatmap_base64, overlay_base64)
-        # Add original filename to response
         response['original_filename'] = original_filename
         
         return jsonify(response)
@@ -338,28 +252,19 @@ def api_predict():
 
 @app.route('/api/predict/base64', methods=['POST'])
 def api_predict_base64():
-    """
-    API endpoint that accepts base64 encoded images from OutSystems.
-    
-    Expected JSON payload: { "image_data": "base64_encoded_string" }
-    Returns a JSON response with prediction results.
-    """
     logger.info("=== /api/predict/base64 - Begin request ===")
     
-    # Log de request headers
     logger.info(f"Headers: {dict(request.headers)}")
     
-    # Check of het een JSON request is
     if not request.is_json:
         logger.error("Fout: Geen JSON payload ontvangen")
         logger.info(f"Content-Type: {request.content_type}")
-        logger.info(f"Request data: {request.data[:200]}...")  # Log eerste 200 tekens
+        logger.info(f"Request data: {request.data[:200]}...")
         return jsonify({
             'success': False,
             'error': 'JSON payload required'
         }), 400
     
-    # Haal de JSON data op
     try:
         data = request.get_json()
         logger.info(f"JSON data keys: {list(data.keys())}")
@@ -370,7 +275,6 @@ def api_predict_base64():
             'error': f'Error parsing JSON: {str(e)}'
         }), 400
     
-    # Check of image_data aanwezig is
     if 'image_data' not in data:
         logger.error("Fout: Geen 'image_data' veld in de JSON")
         return jsonify({
@@ -378,10 +282,8 @@ def api_predict_base64():
             'error': 'Missing image_data field'
         }), 400
     
-    # Haal de base64 string op
     base64_data = data['image_data']
     
-    # Log de lengte en eerste/laatste karakters van de base64 string
     if isinstance(base64_data, str):
         base64_length = len(base64_data)
         logger.info(f"Base64 string lengte: {base64_length} tekens")
@@ -397,7 +299,6 @@ def api_predict_base64():
             'error': f'image_data is not a string but: {type(base64_data).__name__}'
         }), 400
     
-    # Valideer de base64 string
     is_valid, validate_error = is_valid_base64(base64_data)
     if not is_valid:
         logger.error(f"Fout: Ongeldige base64 string: {validate_error}")
@@ -407,39 +308,31 @@ def api_predict_base64():
         }), 400
     
     try:
-        # Verwijder de data URL prefix als die aanwezig is
         if 'base64,' in base64_data:
             logger.info("Data URL prefix gevonden en verwijderd")
             base64_data = base64_data.split('base64,')[1]
         
-        # Decodeer de base64 string
         logger.info("Base64 string decoderen...")
         image_data = base64.b64decode(base64_data)
         logger.info(f"Gedecodeerde data lengte: {len(image_data)} bytes")
         
-        # Open de afbeelding met PIL
         logger.info("Afbeelding openen met PIL...")
         img = Image.open(io.BytesIO(image_data))
         logger.info(f"Afbeelding info: mode={img.mode}, size={img.size}")
         
-        # Convert naar RGB indien nodig
         if img.mode != 'RGB':
             logger.info(f"Afbeelding mode {img.mode} omzetten naar RGB")
             img = img.convert('RGB')
         
-        # Genereer een unieke bestandsnaam
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"base64_upload_{timestamp}_{str(uuid.uuid4())[:8]}.jpg"
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         
-        # Sla de afbeelding op (nodig voor heatmap generatie)
         img.save(file_path)
         
-        # Verwerk de afbeelding en maak voorspelling
         logger.info("Afbeelding verwerken voor model...")
         processed_image = process_pil_image(img)
         
-        # Generate heatmap
         try:
             logger.info("Heatmap genereren...")
             heatmap = generate_gradcam(processed_image, model)
@@ -453,14 +346,11 @@ def api_predict_base64():
         prediction = model.predict(processed_image)[0][0]
         logger.info(f"Raw voorspelling: {prediction}")
         
-        # Zet voorspelling om naar percentages
         fresh_percentage = float((1 - prediction) * 100)
         rotten_percentage = float(prediction * 100)
         
-        # Bepaal classificatie
         classification = "fresh" if fresh_percentage > rotten_percentage else "rotten"
         
-        # Create image URL
         image_url = f"{request.url_root}uploads/{filename}".replace("http://", "https://")
         
         result = {
