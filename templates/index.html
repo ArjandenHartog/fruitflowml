@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apple Freshness Classifier</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding-top: 50px;
+        }
+        .main-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .upload-container {
+            border: 2px dashed #ddd;
+            border-radius: 5px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+        #preview {
+            max-width: 300px;
+            max-height: 300px;
+            margin: 20px auto;
+            display: none;
+        }
+        .result-container {
+            margin-top: 30px;
+            display: none;
+        }
+        .progress {
+            height: 30px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        .fresh-bar {
+            background-color: #28a745;
+        }
+        .rotten-bar {
+            background-color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="container main-container">
+        <div class="header">
+            <h1>Apple Freshness Classifier</h1>
+            <p class="text-muted">Upload an apple image to check if it's fresh or rotten</p>
+        </div>
+
+        <div class="upload-container" id="drop-area">
+            <form id="upload-form" enctype="multipart/form-data">
+                <p>Drop an image here or click to select</p>
+                <input type="file" id="file-input" name="file" accept="image/*" class="d-none">
+                <button type="button" id="select-button" class="btn btn-primary">Select Image</button>
+            </form>
+            <img id="preview" src="#" alt="Image preview">
+        </div>
+
+        <div class="text-center">
+            <button id="predict-button" class="btn btn-success btn-lg" disabled>Analyze Image</button>
+            <div class="spinner-border text-primary d-none" id="loading" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+
+        <div class="result-container" id="result-container">
+            <h3 class="text-center mb-4">Analysis Results</h3>
+            
+            <div class="mb-3">
+                <label class="form-label">Fresh:</label>
+                <div class="progress">
+                    <div id="fresh-bar" class="progress-bar fresh-bar" role="progressbar" style="width: 0%">0%</div>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Rotten:</label>
+                <div class="progress">
+                    <div id="rotten-bar" class="progress-bar rotten-bar" role="progressbar" style="width: 0%">0%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const dropArea = document.getElementById('drop-area');
+            const fileInput = document.getElementById('file-input');
+            const selectButton = document.getElementById('select-button');
+            const preview = document.getElementById('preview');
+            const predictButton = document.getElementById('predict-button');
+            const loading = document.getElementById('loading');
+            const resultContainer = document.getElementById('result-container');
+            const freshBar = document.getElementById('fresh-bar');
+            const rottenBar = document.getElementById('rotten-bar');
+
+            // File selection via button
+            selectButton.addEventListener('click', () => {
+                fileInput.click();
+            });
+
+            // File selection change
+            fileInput.addEventListener('change', handleFileSelect);
+
+            // Drag and drop events
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, highlight, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, unhighlight, false);
+            });
+
+            function highlight() {
+                dropArea.classList.add('bg-light');
+            }
+
+            function unhighlight() {
+                dropArea.classList.remove('bg-light');
+            }
+
+            dropArea.addEventListener('drop', handleDrop, false);
+
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+
+                if (files.length) {
+                    fileInput.files = files;
+                    handleFileSelect();
+                }
+            }
+
+            function handleFileSelect() {
+                if (fileInput.files.length) {
+                    const file = fileInput.files[0];
+                    
+                    // Check if file is an image
+                    if (!file.type.match('image.*')) {
+                        alert('Please select an image file.');
+                        return;
+                    }
+
+                    // Display preview
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        preview.src = e.target.result;
+                        preview.style.display = 'block';
+                        predictButton.disabled = false;
+                    };
+                    reader.readAsDataURL(file);
+                    
+                    // Hide previous results
+                    resultContainer.style.display = 'none';
+                }
+            }
+
+            // Predict button click
+            predictButton.addEventListener('click', function() {
+                if (!fileInput.files.length) return;
+
+                // Show loading, hide result
+                loading.classList.remove('d-none');
+                predictButton.disabled = true;
+                resultContainer.style.display = 'none';
+
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+
+                fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    loading.classList.add('d-none');
+                    predictButton.disabled = false;
+                    
+                    if (data.error) {
+                        alert(data.error);
+                        return;
+                    }
+
+                    // Update progress bars
+                    const freshPercentage = parseFloat(data.fresh_percentage);
+                    const rottenPercentage = parseFloat(data.rotten_percentage);
+                    
+                    freshBar.style.width = `${freshPercentage}%`;
+                    freshBar.textContent = data.fresh_percentage;
+                    
+                    rottenBar.style.width = `${rottenPercentage}%`;
+                    rottenBar.textContent = data.rotten_percentage;
+                    
+                    // Show results
+                    resultContainer.style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    loading.classList.add('d-none');
+                    predictButton.disabled = false;
+                    alert('An error occurred. Please try again.');
+                });
+            });
+        });
+    </script>
+</body>
+</html> 

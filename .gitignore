@@ -1,0 +1,17 @@
+test
+train
+uploads
+
+apple_classifier_model.h5
+apple_classifier_model.json
+apple_classifier_model.png
+apple_classifier_model.html
+apple_classifier_model.py
+apple_classifier_model.ipynb
+apple_classifier_model.pdf
+
+# Virtual Environment
+venv/
+venv
+/venv/
+/venv

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apple Classifier API Documentation</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+        }
+        .endpoint {
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            background-color: #f8f9fa;
+        }
+        .method {
+            font-weight: bold;
+            color: #fff;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+        .get {
+            background-color: #28a745;
+        }
+        .post {
+            background-color: #007bff;
+        }
+        pre {
+            background-color: #343a40;
+            color: #fff;
+            padding: 1rem;
+            border-radius: 0.25rem;
+            margin-top: 1rem;
+        }
+        .section-title {
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #dee2e6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="mb-5">
+            <h1 class="text-center">Apple Classifier API Documentation</h1>
+            <p class="lead text-center">Integration guide for OutSystems and other platforms</p>
+        </header>
+
+        <section>
+            <h2 class="section-title">Overview</h2>
+            <p>
+                This API provides endpoints to classify apple images as fresh or rotten. 
+                The API is designed to be easily integrated with OutSystems or any other 
+                platform that can make HTTP requests.
+            </p>
+            <p>
+                <strong>Base URL:</strong> <code>http://<your-server-ip>:5000</code>
+            </p>
+        </section>
+
+        <section>
+            <h2 class="section-title">API Endpoints</h2>
+
+            <div class="endpoint">
+                <h3>
+                    <span class="method get">GET</span>
+                    <code>/api/test</code>
+                </h3>
+                <p>A simple endpoint to test if the API is running correctly.</p>
+                
+                <h4>Response</h4>
+                <pre>
+{
+    "success": true,
+    "message": "Apple Classifier API is running",
+    "version": "1.0.0"
+}
+                </pre>
+            </div>
+
+            <div class="endpoint">
+                <h3>
+                    <span class="method post">POST</span>
+                    <code>/api/predict</code>
+                </h3>
+                <p>Classify an apple image by uploading a file. Best for OutSystems file uploads.</p>
+                
+                <h4>Request</h4>
+                <p>Content-Type: <code>multipart/form-data</code></p>
+                <p>Parameters:</p>
+                <ul>
+                    <li><code>file</code> - The image file to classify (JPG, PNG, JPEG)</li>
+                </ul>
+                
+                <h4>Response</h4>
+                <pre>
+{
+    "success": true,
+    "fresh_percentage": 95.23,
+    "rotten_percentage": 4.77,
+    "classification": "fresh",
+    "filename": "apple.jpg"
+}
+                </pre>
+                
+                <h4>Error Response</h4>
+                <pre>
+{
+    "success": false,
+    "error": "Error message here"
+}
+                </pre>
+            </div>
+
+            <div class="endpoint">
+                <h3>
+                    <span class="method post">POST</span>
+                    <code>/api/predict/base64</code>
+                </h3>
+                <p>Classify an apple image using a base64-encoded string. Useful for OutSystems mobile apps or when direct file upload is not possible.</p>
+                
+                <h4>Request</h4>
+                <p>Content-Type: <code>application/json</code></p>
+                <pre>
+{
+    "image_data": "base64_encoded_image_data_here"
+}
+                </pre>
+                
+                <h4>Response</h4>
+                <pre>
+{
+    "success": true,
+    "fresh_percentage": 95.23,
+    "rotten_percentage": 4.77,
+    "classification": "fresh"
+}
+                </pre>
+                
+                <h4>Error Response</h4>
+                <pre>
+{
+    "success": false,
+    "error": "Error message here"
+}
+                </pre>
+            </div>
+        </section>
+
+        <section>
+            <h2 class="section-title">OutSystems Integration</h2>
+
+            <h3>Method 1: REST API with File Upload</h3>
+            <p>For web applications where users can upload images:</p>
+            <ol>
+                <li>In Service Studio, create a REST API consumer for this API</li>
+                <li>Set the endpoint URL to <code>http://<your-server-ip>:5000/api/predict</code></li>
+                <li>Configure the method as POST with "multipart/form-data" content type</li>
+                <li>Create a Binary variable to hold the uploaded file</li>
+                <li>Map the Binary variable to the "file" parameter</li>
+                <li>Parse the JSON response and use the "classification" and percentage values in your app</li>
+            </ol>
+
+            <h3>Method 2: REST API with Base64 Encoding</h3>
+            <p>For mobile apps or when working with images from the device:</p>
+            <ol>
+                <li>In Service Studio, create a REST API consumer for this API</li>
+                <li>Set the endpoint URL to <code>http://<your-server-ip>:5000/api/predict/base64</code></li>
+                <li>Configure the method as POST with application/json content type</li>
+                <li>Convert your image to base64 using the BinaryToBase64 function</li>
+                <li>Create a JSON structure with the "image_data" field containing the base64 string</li>
+                <li>Send the request and parse the response as in Method 1</li>
+            </ol>
+
+            <div class="alert alert-info">
+                <strong>Tip:</strong> Make sure your OutSystems app has the necessary network permissions to communicate with external APIs.
+            </div>
+        </section>
+
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 
